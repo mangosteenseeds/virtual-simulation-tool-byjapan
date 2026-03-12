@@ -6,10 +6,12 @@ import { ChatInput } from "@/components/ChatInput";
 import { ConditionSummary } from "@/components/ConditionSummary";
 import { ResultSummary } from "@/components/ResultSummary";
 import { ComparisonPanel } from "@/components/ComparisonPanel";
+import { RecommendationPanel } from "@/components/RecommendationPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { ThemeTreePanel } from "@/components/ThemeTreePanel";
 import { GlobalMemoryModeToggle } from "@/components/MemoryModeToggle";
 import { memoryModeLabel } from "@/lib/themeEngine";
+import { generateRecommendations } from "@/lib/recommendationEngine";
 
 type LeftTab = "history" | "themes";
 
@@ -18,7 +20,8 @@ export default function SimulationPage() {
   const loadingState = useSimulationStore((s) => s.loadingState);
   const errorState = useSimulationStore((s) => s.errorState);
   const currentResult = useSimulationStore((s) => s.currentResult);
-  const currentMemoryMode = useSimulationStore((s) => s.currentMemoryMode);
+  const currentCondition = useSimulationStore((s) => s.currentCondition);
+  const setRecommendations = useSimulationStore((s) => s.setRecommendations);
   const currentTheme = useSimulationStore(selectCurrentTheme);
 
   const [leftTab, setLeftTab] = useState<LeftTab>("history");
@@ -27,12 +30,21 @@ export default function SimulationPage() {
     initBaseResult();
   }, [initBaseResult]);
 
+  // 結果が変わるたびにレコメンドを自動生成
+  useEffect(() => {
+    if (!currentResult) {
+      setRecommendations([]);
+      return;
+    }
+    const recs = generateRecommendations(currentResult, currentCondition);
+    setRecommendations(recs);
+  }, [currentResult, currentCondition, setRecommendations]);
+
   return (
     <div className="flex h-screen overflow-hidden bg-gray-950 text-gray-100">
 
       {/* ── 左カラム：履歴 / テーマツリー ── */}
       <aside className="w-64 flex-shrink-0 border-r border-gray-800 flex flex-col overflow-hidden">
-        {/* タブ */}
         <div className="flex border-b border-gray-800 flex-shrink-0">
           <button
             onClick={() => setLeftTab("history")}
@@ -55,8 +67,6 @@ export default function SimulationPage() {
             テーマ管理
           </button>
         </div>
-
-        {/* タブコンテンツ */}
         <div className="flex-1 overflow-y-auto">
           {leftTab === "history" ? <HistoryPanel /> : <ThemeTreePanel />}
         </div>
@@ -73,28 +83,24 @@ export default function SimulationPage() {
             <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded whitespace-nowrap">
               母集団 10,000人
             </span>
-            {/* 現在テーマ表示 */}
             {currentTheme && (
               <span className="text-xs text-blue-400 bg-blue-900/30 border border-blue-800 px-2 py-0.5 rounded truncate max-w-[160px]">
                 {currentTheme.title}
               </span>
             )}
           </div>
-
           <div className="flex items-center gap-4 flex-shrink-0">
-            {/* 記憶モードトグル */}
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-600 whitespace-nowrap">記憶モード:</span>
               <GlobalMemoryModeToggle />
             </div>
-
-            {loadingState === "filtering" || loadingState === "aggregating" ? (
+            {(loadingState === "filtering" || loadingState === "aggregating") && (
               <span className="text-xs text-blue-400 animate-pulse">集計中…</span>
-            ) : null}
+            )}
           </div>
         </header>
 
-        {/* 条件入力エリア */}
+        {/* 条件サマリー */}
         <div className="flex-shrink-0 border-b border-gray-800 px-6 py-3">
           <ConditionSummary />
         </div>
@@ -133,13 +139,12 @@ export default function SimulationPage() {
         )}
 
         {/* メッセージエリア */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           {errorState && (
-            <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm">
+            <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm mb-4">
               エラー: {errorState}
             </div>
           )}
-
           {!currentResult && (
             <div className="text-center text-gray-500 text-sm pt-8 space-y-2">
               <p>下の入力欄に自然文で条件を入力するか、サンプルを選んでください</p>
@@ -158,13 +163,14 @@ export default function SimulationPage() {
         </div>
       </main>
 
-      {/* ── 右カラム：結果表示 ── */}
-      <aside className="w-[420px] flex-shrink-0 border-l border-gray-800 overflow-y-auto">
+      {/* ── 右カラム：結果 + 差分 + レコメンド ── */}
+      <aside className="w-[440px] flex-shrink-0 border-l border-gray-800 overflow-y-auto">
         {currentResult ? (
-          <div>
+          <>
             <ResultSummary />
             <ComparisonPanel />
-          </div>
+            <RecommendationPanel />
+          </>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-600 text-sm px-6 text-center">
             条件を入力すると、ここに集計結果が表示されます
