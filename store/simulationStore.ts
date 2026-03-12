@@ -8,7 +8,7 @@ import type {
   ConditionHistoryEntry,
   LoadingState,
 } from "@/types/simulation";
-import type { Theme, Recommendation } from "@/types/theme";
+import type { Theme, Recommendation, MemoryMode } from "@/types/theme";
 import type { ExportState } from "@/types/export";
 import { runSimulation } from "@/lib/filterEngine";
 import {
@@ -34,6 +34,7 @@ interface SimulationState {
   // テーマ
   currentThemeId: string | null;
   themes: Theme[];
+  currentMemoryMode: MemoryMode;
 
   // レコメンド
   recommendations: Recommendation[];
@@ -64,9 +65,13 @@ interface SimulationActions {
   applyParsedCondition: (parsed: ParsedConditionResult, naturalText: string) => void;
 
   // テーマ操作
-  createTheme: (theme: Theme) => void;
+  addTheme: (theme: Theme) => void;
   updateTheme: (id: string, updates: Partial<Theme>) => void;
   setCurrentTheme: (id: string | null) => void;
+  deleteTheme: (id: string) => void;
+
+  // 記憶モード
+  setMemoryMode: (mode: MemoryMode) => void;
 
   // レコメンド
   setRecommendations: (recs: Recommendation[]) => void;
@@ -101,6 +106,7 @@ export const useSimulationStore = create<SimulationState & SimulationActions>(
     previousResult: null,
     currentThemeId: null,
     themes: [],
+    currentMemoryMode: "with_memory",
     recommendations: [],
     exportState: EMPTY_EXPORT_STATE,
     conditionHistory: [],
@@ -161,7 +167,6 @@ export const useSimulationStore = create<SimulationState & SimulationActions>(
         set({ loadingState: "aggregating" });
         const newResult = runSimulation(newCondition);
 
-        // 履歴エントリ
         const historyEntry: ConditionHistoryEntry = {
           id: `H${Date.now()}`,
           timestamp: new Date().toISOString(),
@@ -171,12 +176,28 @@ export const useSimulationStore = create<SimulationState & SimulationActions>(
           resultSnapshot: newResult,
         };
 
+        // 現在のテーマがあれば latestResult を更新
+        const updatedThemes =
+          state.currentThemeId
+            ? state.themes.map((t) =>
+                t.id === state.currentThemeId
+                  ? {
+                      ...t,
+                      currentCondition: newCondition,
+                      latestResult: newResult,
+                      updatedAt: new Date().toISOString(),
+                    }
+                  : t
+              )
+            : state.themes;
+
         set({
           previousCondition: state.currentCondition,
           previousResult: state.currentResult,
           currentCondition: newCondition,
           currentResult: newResult,
           conditionHistory: [...state.conditionHistory, historyEntry],
+          themes: updatedThemes,
           parserPreview: null,
           loadingState: "done",
         });
@@ -189,20 +210,60 @@ export const useSimulationStore = create<SimulationState & SimulationActions>(
     },
 
     // ── テーマ操作 ────────────────────────────────────────────
-    createTheme: (theme) => {
-      set((state) => ({ themes: [...state.themes, theme] }));
+    addTheme: (theme) => {
+      set((state) => ({
+        themes: [...state.themes, theme],
+        currentThemeId: theme.id,
+        currentCondition: theme.currentCondition,
+        currentResult: theme.latestResult ?? null,
+        previousCondition: state.currentCondition,
+        previousResult: state.currentResult,
+        currentMemoryMode: theme.memoryMode,
+        conditionHistory: [],
+      }));
     },
 
     updateTheme: (id, updates) => {
       set((state) => ({
         themes: state.themes.map((t) =>
-          t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t
+          t.id === id
+            ? { ...t, ...updates, updatedAt: new Date().toISOString() }
+            : t
         ),
       }));
     },
 
+    deleteTheme: (id) => {
+      set((state) => ({
+        themes: state.themes.filter((t) => t.id !== id),
+        currentThemeId:
+          state.currentThemeId === id ? null : state.currentThemeId,
+      }));
+    },
+
     setCurrentTheme: (id) => {
-      set({ currentThemeId: id });
+      const state = get();
+      if (id === null) {
+        set({ currentThemeId: null });
+        return;
+      }
+      const theme = state.themes.find((t) => t.id === id);
+      if (!theme) return;
+
+      set({
+        currentThemeId: id,
+        currentCondition: theme.currentCondition,
+        currentResult: theme.latestResult ?? null,
+        previousCondition: null,
+        previousResult: null,
+        currentMemoryMode: theme.memoryMode,
+        conditionHistory: [],
+      });
+    },
+
+    // ── 記憶モード ────────────────────────────────────────────
+    setMemoryMode: (mode) => {
+      set({ currentMemoryMode: mode });
     },
 
     // ── レコメンド ────────────────────────────────────────────
