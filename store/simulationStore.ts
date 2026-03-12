@@ -136,6 +136,19 @@ export const useSimulationStore = create<SimulationState & SimulationActions>(
       const state = get();
       set({ loadingState: "filtering", errorState: null });
 
+      // リセット以外で条件が何も抽出できなかった場合は早期リターン
+      if (
+        parsed.operationType !== "reset" &&
+        Object.keys(parsed.extractedCondition).length === 0
+      ) {
+        set({
+          loadingState: "idle",
+          errorState:
+            "条件を認識できませんでした。別の表現を試してください。（例: 「30代女性」「東京在住」「高収入層」）",
+        });
+        return;
+      }
+
       try {
         let newCondition: SimulationCondition;
 
@@ -166,6 +179,12 @@ export const useSimulationStore = create<SimulationState & SimulationActions>(
 
         set({ loadingState: "aggregating" });
         const newResult = runSimulation(newCondition);
+
+        // 0件ヒット時は警告を付与（処理は続行）
+        const zeroHitWarning =
+          newResult.totalMatched === 0
+            ? "条件に該当する対象者が0人です。条件の組み合わせが厳しすぎる可能性があります。"
+            : null;
 
         const historyEntry: ConditionHistoryEntry = {
           id: `H${Date.now()}`,
@@ -200,6 +219,7 @@ export const useSimulationStore = create<SimulationState & SimulationActions>(
           themes: updatedThemes,
           parserPreview: null,
           loadingState: "done",
+          errorState: zeroHitWarning,
         });
       } catch (e) {
         set({
