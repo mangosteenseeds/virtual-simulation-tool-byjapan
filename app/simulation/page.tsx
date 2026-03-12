@@ -10,6 +10,7 @@ import { RecommendationPanel } from "@/components/RecommendationPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { ThemeTreePanel } from "@/components/ThemeTreePanel";
 import { GlobalMemoryModeToggle } from "@/components/MemoryModeToggle";
+import { ExportModal } from "@/components/ExportModal";
 import { memoryModeLabel } from "@/lib/themeEngine";
 import { generateRecommendations } from "@/lib/recommendationEngine";
 
@@ -22,6 +23,8 @@ export default function SimulationPage() {
   const currentResult = useSimulationStore((s) => s.currentResult);
   const currentCondition = useSimulationStore((s) => s.currentCondition);
   const setRecommendations = useSimulationStore((s) => s.setRecommendations);
+  const openExportModal = useSimulationStore((s) => s.openExportModal);
+  const exportState = useSimulationStore((s) => s.exportState);
   const currentTheme = useSimulationStore(selectCurrentTheme);
 
   const [leftTab, setLeftTab] = useState<LeftTab>("history");
@@ -89,11 +92,22 @@ export default function SimulationPage() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="flex items-center gap-3 flex-shrink-0">
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-600 whitespace-nowrap">記憶モード:</span>
               <GlobalMemoryModeToggle />
             </div>
+
+            {/* 出力ボタン */}
+            <button
+              onClick={openExportModal}
+              disabled={!currentResult}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-300 text-xs font-medium border border-gray-700 transition-colors"
+            >
+              <span>↓</span>
+              <span>出力</span>
+            </button>
+
             {(loadingState === "filtering" || loadingState === "aggregating") && (
               <span className="text-xs text-blue-400 animate-pulse">集計中…</span>
             )}
@@ -110,13 +124,7 @@ export default function SimulationPage() {
           <div className="flex-shrink-0 border-b border-gray-800 bg-gray-900/50 px-6 py-2.5 text-xs text-gray-500 flex items-center gap-4">
             <span>
               記憶モード:{" "}
-              <span
-                className={
-                  currentTheme.memoryMode === "with_memory"
-                    ? "text-blue-400"
-                    : "text-orange-400"
-                }
-              >
+              <span className={currentTheme.memoryMode === "with_memory" ? "text-blue-400" : "text-orange-400"}>
                 {memoryModeLabel(currentTheme.memoryMode)}
               </span>
             </span>
@@ -177,6 +185,9 @@ export default function SimulationPage() {
           </div>
         )}
       </aside>
+
+      {/* 出力モーダル */}
+      {exportState.isOpen && <ExportModal />}
     </div>
   );
 }
